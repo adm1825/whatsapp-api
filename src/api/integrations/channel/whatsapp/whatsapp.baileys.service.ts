@@ -374,9 +374,10 @@ export class BaileysStartupService extends ChannelStartupService {
       if (this.phoneNumber) {
         // Cada requestPairingCode invalida o código anterior. Pede uma vez só e
         // mantém o mesmo código enquanto o usuário digita, mesmo quando o QR rotaciona.
-        if (!this.instance.qrcode.pairingCode) {
+        if (!this.instance.qrcode.pairingCode || Date.now() - this.pairingCodeAt > 100_000) {
           await delay(1000);
           this.instance.qrcode.pairingCode = await this.client.requestPairingCode(this.phoneNumber);
+          this.pairingCodeAt = Date.now();
         }
       } else {
         this.instance.qrcode.pairingCode = null;
@@ -576,6 +577,19 @@ export class BaileysStartupService extends ChannelStartupService {
     }
   }
 
+  private pairingCodeAt = 0;
+
+  /** Gera um código novo no socket que já está aguardando o pareamento (o anterior deixa de valer). */
+  public async renewPairingCode(number: string): Promise<void> {
+    if (!this.client || this.client.authState?.creds?.registered) return;
+    this.instance.qrcode.pairingCode = await this.client.requestPairingCode(number);
+    this.pairingCodeAt = Date.now();
+  }
+
+  public pairingCodeAgeMs(): number {
+    return this.pairingCodeAt ? Date.now() - this.pairingCodeAt : Number.MAX_SAFE_INTEGER;
+  }
+
   private async createClient(number?: string): Promise<WASocket> {
     this.instance.authState = await this.defineAuthState();
 
@@ -587,6 +601,10 @@ export class BaileysStartupService extends ChannelStartupService {
       this.phoneNumber = number;
 
       this.logger.info(`Phone number: ${number}`);
+
+      // Socket novo: o código do socket anterior não vale mais.
+      this.instance.qrcode.pairingCode = null;
+      this.pairingCodeAt = 0;
 
       // Pareamento por código só é aceito pelo WhatsApp com um navegador reconhecido.
       // O 2º item precisa ser um navegador conhecido; o 1º é o rótulo que aparece entre parênteses: "Chrome (Helper)".

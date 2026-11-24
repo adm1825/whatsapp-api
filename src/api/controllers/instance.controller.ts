@@ -319,7 +319,30 @@ export class InstanceController {
         return await this.connectionState({ instanceName });
       }
 
+      // Pareamento por código: espera o código do socket ficar pronto (devolver vazio faz o app falhar).
+      const esperarCodigo = async () => {
+        for (let i = 0; number && i < 20 && !instance.qrCode?.pairingCode; i++) await delay(500);
+      };
+
       if (state == 'connecting') {
+        await esperarCodigo();
+        // Quem pede o código agora precisa de um código fresco, não do guardado há minutos.
+        const wa = instance as unknown as {
+          renewPairingCode?: (n: string) => Promise<void>;
+          pairingCodeAgeMs?: () => number;
+        };
+        if (
+          number &&
+          instance.qrCode?.pairingCode &&
+          wa.renewPairingCode &&
+          (wa.pairingCodeAgeMs?.() ?? Infinity) > 20_000
+        ) {
+          try {
+            await wa.renewPairingCode(number);
+          } catch (erro) {
+            this.logger.error(erro);
+          }
+        }
         return instance.qrCode;
       }
 
@@ -327,6 +350,7 @@ export class InstanceController {
         await instance.connectToWhatsapp(number);
 
         await delay(2000);
+        await esperarCodigo();
         return instance.qrCode;
       }
 
