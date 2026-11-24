@@ -81,7 +81,6 @@ import { Boom } from '@hapi/boom';
 import { createId as cuid } from '@paralleldrive/cuid2';
 import { Instance, Message } from '@prisma/client';
 import { createJid } from '@utils/createJid';
-import { fetchLatestWaWebVersion } from '@utils/fetchLatestWaWebVersion';
 import { makeProxyAgent, makeProxyAgentUndici } from '@utils/makeProxyAgent';
 import { getOnWhatsappCache, saveOnWhatsappCache } from '@utils/onWhatsappCache';
 import { status } from '@utils/renderStatus';
@@ -92,6 +91,7 @@ import { useMultiFileAuthStateRedisDb } from '@utils/use-multi-file-auth-state-r
 import axios from 'axios';
 import makeWASocket, {
   AnyMessageContent,
+  Browsers,
   BufferedEventData,
   BufferJSON,
   CacheStore,
@@ -373,8 +373,12 @@ export class BaileysStartupService extends ChannelStartupService {
       };
 
       if (this.phoneNumber) {
-        await delay(1000);
-        this.instance.qrcode.pairingCode = await this.client.requestPairingCode(this.phoneNumber);
+        // Cada requestPairingCode invalida o código anterior. Pede uma vez só e
+        // mantém o mesmo código enquanto o usuário digita, mesmo quando o QR rotaciona.
+        if (!this.instance.qrcode.pairingCode) {
+          await delay(1000);
+          this.instance.qrcode.pairingCode = await this.client.requestPairingCode(this.phoneNumber);
+        }
       } else {
         this.instance.qrcode.pairingCode = null;
       }
@@ -584,6 +588,9 @@ export class BaileysStartupService extends ChannelStartupService {
       this.phoneNumber = number;
 
       this.logger.info(`Phone number: ${number}`);
+
+      // Pareamento por código só é aceito pelo WhatsApp com um navegador reconhecido.
+      browserOptions = { browser: Browsers.macOS('Chrome') };
     } else {
       const browser: WABrowserDescription = [session.CLIENT, session.NAME, release()];
       browserOptions = { browser };
@@ -591,8 +598,8 @@ export class BaileysStartupService extends ChannelStartupService {
       this.logger.info(`Browser: ${browser}`);
     }
 
-    const baileysVersion = await fetchLatestWaWebVersion({});
-    const version = baileysVersion.version;
+    // Versão do WhatsApp Web fixada: a mais recente do site quebrou o pareamento por código.
+    const version: [number, number, number] = [2, 3000, 1043857760];
     const log = `Baileys version: ${version.join('.')}`;
 
     this.logger.info(log);
