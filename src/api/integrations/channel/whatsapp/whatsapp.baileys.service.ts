@@ -91,7 +91,6 @@ import { useMultiFileAuthStateRedisDb } from '@utils/use-multi-file-auth-state-r
 import axios from 'axios';
 import makeWASocket, {
   AnyMessageContent,
-  Browsers,
   BufferedEventData,
   BufferJSON,
   CacheStore,
@@ -590,7 +589,8 @@ export class BaileysStartupService extends ChannelStartupService {
       this.logger.info(`Phone number: ${number}`);
 
       // Pareamento por código só é aceito pelo WhatsApp com um navegador reconhecido.
-      browserOptions = { browser: Browsers.macOS('Chrome') };
+      // O 2º item precisa ser um navegador conhecido; o 1º é o rótulo que aparece entre parênteses: "Chrome (Helper)".
+      browserOptions = { browser: ['Helper', 'Chrome', '14.4.1'] as WABrowserDescription };
     } else {
       const browser: WABrowserDescription = [session.CLIENT, session.NAME, release()];
       browserOptions = { browser };
