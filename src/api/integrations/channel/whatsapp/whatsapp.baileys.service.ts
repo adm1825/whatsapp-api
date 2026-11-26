@@ -1899,6 +1899,9 @@ export class BaileysStartupService extends ChannelStartupService {
   };
 
   private eventHandler() {
+    // O socket a que estes eventos pertencem. No pareamento o WhatsApp pede o reinício (515): o socket antigo fecha e um novo é criado.
+    // O socket antigo ainda pode emitir um `close` 401 logo depois; sem esta conferência, ele era tratado como logout e derrubava o NOVO.
+    const socketDosEventos = this.client;
     this.client.ev.process(async (events) => {
       this.eventProcessingQueue = this.eventProcessingQueue.then(async () => {
         try {
@@ -1926,7 +1929,13 @@ export class BaileysStartupService extends ChannelStartupService {
             }
 
             if (events['connection.update']) {
-              this.connectionUpdate(events['connection.update']);
+              if (this.client === socketDosEventos) {
+                this.connectionUpdate(events['connection.update']);
+              } else {
+                this.logger.warn(
+                  `Evento de conexão de um socket já substituído foi ignorado (${events['connection.update'].connection ?? 'sem estado'})`,
+                );
+              }
             }
 
             if (events['creds.update']) {
